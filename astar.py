@@ -1,75 +1,60 @@
-from queue import PriorityQueue
+import heapq
 
-GRAPH = {
-    'Delhi': {'Jaipur': 280, 'Agra': 210, 'Lucknow': 400},
-    'Agra': {'Delhi': 210, 'Gwalior': 120},
-    'Gwalior': {'Agra': 120, 'Bhopal': 400},
-    'Jaipur': {'Delhi': 280, 'Jodhpur': 330, 'Udaipur': 410},
-    'Lucknow': {'Delhi': 400, 'Kanpur': 80},
-    'Kanpur': {'Lucknow': 80, 'Allahabad': 190},
-    'Allahabad': {'Kanpur': 190, 'Varanasi': 120},
-    'Varanasi': {'Allahabad': 120, 'Patna': 250},
-    'Patna': {'Varanasi': 250, 'Ranchi': 300, 'Kolkata': 560},
-    'Ranchi': {'Patna': 300, 'Jamshedpur': 130},
-    'Jamshedpur': {'Ranchi': 130, 'Kolkata': 280},
-    'Kolkata': {'Patna': 560, 'Jamshedpur': 280, 'Bhubaneswar': 440},
-    'Bhubaneswar': {'Kolkata': 440, 'Cuttack': 30, 'Puri': 60},
-    'Puri': {'Bhubaneswar': 60},
-    'Cuttack': {'Bhubaneswar': 30},
-    'Jodhpur': {'Jaipur': 330, 'Udaipur': 250},
-    'Udaipur': {'Jaipur': 410, 'Jodhpur': 250, 'Ahmedabad': 260},
-    'Ahmedabad': {'Udaipur': 260, 'Surat': 280},
-    'Surat': {'Ahmedabad': 280, 'Mumbai': 280},
-    'Mumbai': {'Surat': 280, 'Pune': 150},
-    'Pune': {'Mumbai': 150}
-}
+class PuzzleState:
+    def __init__(self, board, goal, moves=0, prev=None):
+        self.board, self.goal, self.moves, self.prev = board, goal, moves, prev
+        self.blank_pos = board.index(0)
+    
+    def __lt__(self, other):
+        return self.cost() < other.cost()
+    
+    def cost(self):
+        return self.moves + sum(abs(i//3 - self.goal.index(val)//3) + abs(i%3 - self.goal.index(val)%3)
+                                for i, val in enumerate(self.board) if val)
 
-def bestfirst(source, destination):
-    straight_line = {
-        'Delhi': 1400, 'Jaipur': 1200, 'Agra': 1300, 'Lucknow': 1100, 'Kanpur': 1050,
-        'Allahabad': 900, 'Varanasi': 850, 'Patna': 600, 'Gwalior': 1200, 'Bhopal': 1000,
-        'Ranchi': 500, 'Jamshedpur': 300, 'Kolkata': 0, 'Bhubaneswar': 450, 'Puri': 510,
-        'Cuttack': 440, 'Jodhpur': 1400, 'Udaipur': 1300, 'Ahmedabad': 1200, 'Surat': 1250,
-        'Mumbai': 1600, 'Pune': 1550
-    }
+    def neighbors(self):
+        moves, neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1)], []
+        for dr, dc in moves:
+            r, c = divmod(self.blank_pos, 3)
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < 3 and 0 <= nc < 3:
+                n_blank = nr * 3 + nc
+                new_board = self.board[:]
+                new_board[self.blank_pos], new_board[n_blank] = new_board[n_blank], new_board[self.blank_pos]
+                neighbors.append(PuzzleState(new_board, self.goal, self.moves + 1, self))
+        return neighbors
 
-    priority_queue = PriorityQueue()
-    priority_queue.put((straight_line[source], 0, source, [source]))
-
-    visited = {source: 0}
-
-    while not priority_queue.empty():
-        heuristic, cost, vertex, path = priority_queue.get()
-
-        if vertex == destination:
-            return heuristic, cost, path
-
-        for next_node, travel_cost in GRAPH.get(vertex, {}).items():
-            new_cost = cost + travel_cost
-            if next_node not in visited or new_cost < visited[next_node]:
-                visited[next_node] = new_cost
-                priority_queue.put((straight_line[next_node], new_cost, next_node, path + [next_node]))
-
+def a_star(start, goal):
+    open_list, closed_set = [PuzzleState(start, goal)], set()
+    while open_list:
+        current = heapq.heappop(open_list)
+        if current.board == goal: return reconstruct_path(current)
+        closed_set.add(tuple(current.board))
+        for neighbor in current.neighbors():
+            if tuple(neighbor.board) not in closed_set:
+                heapq.heappush(open_list, neighbor)
     return None
 
-def main():
-    print('ENTER SOURCE :', end=' ')
-    source = input().strip()
-    print('ENTER GOAL :', end=' ')
-    goal = input().strip()
+def reconstruct_path(state):
+    path = []
+    while state: path.append(state.board); state = state.prev
+    return path[::-1]
 
-    if source not in GRAPH or goal not in GRAPH:
-        print('ERROR: CITY DOES NOT EXIST.')
-    else:
-        print('\nBest First Search PATH:')
-        result = bestfirst(source, goal)
+def get_puzzle_input(prompt):
+    print(prompt)
+    puzzle = []
+    for i in range(3):
+        row = input(f"Enter row {i + 1} (space-separated, use 0 for blank): ").strip().split()
+        puzzle.extend([int(num) for num in row])
+    return puzzle
 
-        if result:
-            heuristic, cost, optimal_path = result
-            print('PATH COST =', cost)
-            print(' -> '.join(optimal_path))
-        else:
-            print("No path found from {} to {}".format(source, goal))
+start = get_puzzle_input("Enter the start state of the puzzle:")
+goal = get_puzzle_input("Enter the goal state of the puzzle:")
 
-if __name__ == '__main__':
-    main()
+solution = a_star(start, goal)
+if solution:
+    print("\nSolution found:")
+    for step in solution:
+        print(step[:3], "\n", step[3:6], "\n", step[6:], "\n")
+else:
+    print("No solution found.")
